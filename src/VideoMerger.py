@@ -1,270 +1,265 @@
 import os
-from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
+from moviepy.editor import VideoFileClip, concatenate_videoclips
+from CatGhepCoBan import CatGhepCoBan
 
-class CatGhepCoBan:
-    def __init__(self, temp_folder=None):
-        self.temp_folder = temp_folder or "temp"
-        os.makedirs(self.temp_folder, exist_ok=True)
-
-    def clear_temp_folder(self):
-        print("Đang dọn dẹp các file tạm...")
-        for filename in os.listdir(self.temp_folder):
-            file_path = os.path.join(self.temp_folder, filename)
-            try:
-                if os.path.isfile(file_path):
-                    os.remove(file_path)
-            except Exception as e:
-                print(f"Lỗi khi xóa file tạm {file_path}: {e}")
-
-    def merge_videos(self, link1, link2):
-        c1 = VideoFileClip(link1)
-        c2 = VideoFileClip(link2)
-        target_resolution = (720, 1280)
-        target_fps = 30
-        c1 = c1.resize(target_resolution).set_fps(target_fps)
-        c2 = c2.resize(target_resolution).set_fps(target_fps)
-        out = concatenate_videoclips([c1, c2])
-        name = f"{os.path.splitext(os.path.basename(link1))[0]}_{os.path.splitext(os.path.basename(link2))[0]}.mp4"
-        path = os.path.join(self.temp_folder, name)
-        out.write_videofile(path, codec="libx264", fps=target_fps)
-        c1.close()
-        c2.close()
-        out.close()
-        return path
-
-    def cut_head(self, input_path, duration):
-        clip = VideoFileClip(input_path).subclip(duration)
-        name = os.path.splitext(os.path.basename(input_path))[0]
-        output_path = os.path.join(self.temp_folder, f"{name}_cuthead.mp4")
-        clip.write_videofile(output_path, codec='libx264')
-        clip.close()
-        return output_path
-
-    def split_video_by_time(self, input_path, split_time):
-        name = os.path.splitext(os.path.basename(input_path))[0]
-        output1 = os.path.join(self.temp_folder, f"{name}_part1.mp4")
-        output2 = os.path.join(self.temp_folder, f"{name}_part2.mp4")
-        clip = VideoFileClip(input_path)
-        # Đảm bảo thời gian cắt không vượt quá thời lượng video
-        split_time = min(split_time, clip.duration)
-        clip1 = clip.subclip(0, split_time)
-        clip2 = clip.subclip(split_time)
-        clip1.write_videofile(output1, codec='libx264')
-        clip2.write_videofile(output2, codec='libx264')
-        clip1.close()
-        clip2.close()
-        clip.close()
-        return output1, output2
-
-    def extract_audio(self, video_path):
-        """Chỉ tách audio từ video và trả về đường dẫn file audio."""
-        clip = VideoFileClip(video_path)
-        name = os.path.splitext(os.path.basename(video_path))[0]
-        audio_output = os.path.join(self.temp_folder, f"{name}_audio_only.mp3")
-
-        if clip.audio is not None:
-            clip.audio.write_audiofile(audio_output)
-            clip.close()
-            return audio_output
-        else:
-            clip.close()
-            # Trả về None nếu video không có audio
-            return None
-            
-    def extract_audio_and_video(self, video_path):
-        clip = VideoFileClip(video_path)
-        name = os.path.splitext(os.path.basename(video_path))[0]
-        audio_output = os.path.join(self.temp_folder, f"{name}_extract_audio.mp3")
-        video_output = os.path.join(self.temp_folder, f"{name}_extract_video.mp4")
-
-        if clip.audio is not None:
-            clip.audio.write_audiofile(audio_output)
-        clip.without_audio().write_videofile(video_output, codec='libx264')
-        clip.close()
-        return video_output, audio_output
-
-    def set_audio_video(self, video_link, audio_link, output_path=None):
-        video = VideoFileClip(video_link)
-        audio = AudioFileClip(audio_link)
-        # Đảm bảo audio có cùng độ dài với video
-        if audio.duration > video.duration:
-            audio = audio.subclip(0, video.duration)
-            
-        name = os.path.splitext(os.path.basename(video_link))[0]
-        output_path = output_path or os.path.join(self.temp_folder, f"{name}_set_audio_video.mp4")
-        clip = video.set_audio(audio)
-        clip.write_videofile(output_path, codec='libx264')
-        video.close()
-        audio.close()
-        clip.close()
-        return output_path
-
+# === CẤU HÌNH TẬP TRUNG ===
+# Thay đổi các giá trị này sẽ ảnh hưởng đến tất cả các hàm bên dưới
+TARGET_RESOLUTION = (720, 1280)
+TARGET_FPS = 30
+VIDEO_CODEC = "libx264"
 
 class VideoMerger:
+    """
+    Lớp chứa các logic nghiệp vụ phức tạp để ghép video theo các kịch bản khác nhau.
+    """
     def __init__(self, output_folder):
         self.output_folder = output_folder
         os.makedirs(self.output_folder, exist_ok=True)
         self.created_files = []
         self.CG = CatGhepCoBan()
+        # Cập nhật cấu hình cho đối tượng CatGhepCoBan nếu cần
+        self.CG.TARGET_RESOLUTION = TARGET_RESOLUTION
+        self.CG.TARGET_FPS = TARGET_FPS
+        self.CG.VIDEO_CODEC = VIDEO_CODEC
+
+
+    def get_video_details(self, video_path):
+        """
+        Lấy độ phân giải (resolution), FPS và thời lượng (duration) của video.
+
+        Args:
+            video_path (str): Đường dẫn đến file video.
+
+        Returns:
+            tuple: Chứa (resolution, fps, duration). 
+                   Ví dụ: ([720, 1280], 30, 15.49).
+                   Trả về (None, None, None) nếu có lỗi.
+        """
+        if not os.path.exists(video_path):
+            print(f"Lỗi: File không tồn tại tại '{video_path}'")
+            return None, None, None
+        
+        clip = None
+        try:
+            clip = VideoFileClip(video_path)
+            resolution = clip.size
+            fps = clip.fps
+            duration = clip.duration # <-- Dòng mới được thêm vào
+            clip.close()
+            return resolution, fps, duration # <-- Trả về 3 giá trị
+        except Exception as e:
+            print(f"Lỗi khi đọc file video '{video_path}': {e}")
+            if clip:
+                clip.close()
+            return None, None, None # <-- Trả về 3 giá trị
+
 
     def merge_with_trimmed_second(self, link1, link2, output=None):
-        # ... (Hàm này giữ nguyên như cũ) ...
-        c1_check = VideoFileClip(link1)
-        if c1_check.duration <= 0.5:
-             c1_check.close()
-             raise ValueError(f"Video {link1} quá ngắn")
-        c1_check.close()
-        
-        # Cắt video thứ 2 thành 2 phần
+        """
+        Kịch bản 1: Ghép video1 vào đầu video2, lấy audio của đầu video2 gán cho video1.
+        """
+        c1_clip_check = None
         try:
-            c1_duration = VideoFileClip(link1).duration
+            c1_clip_check = VideoFileClip(link1)
+            if c1_clip_check.duration <= 0.5:
+                raise ValueError(f"Video {link1} quá ngắn để xử lý.")
+            c1_duration = c1_clip_check.duration
+            c1_clip_check.close()
+            
             trimmed1, trimmed2 = self.CG.split_video_by_time(link2, c1_duration)
-        except Exception as e:
-            print(f"Lỗi khi cắt video {link2}: {e}")
-            return None
-        if not (os.path.exists(trimmed1) and os.path.exists(trimmed2)):
-            print("Trimmed video không tồn tại")
-            return None
-        # Tách audio từ phần đầu của video 2
-        _, audio_part1 = self.CG.extract_audio_and_video(trimmed1)
-        if not os.path.exists(audio_part1):
-            print("Không tách được audio")
-            return None
-        # Gán phần audio đó cho video 1
-        c1_audio_set = self.CG.set_audio_video(link1, audio_part1)
-        if not os.path.exists(c1_audio_set):
-            print("Không tạo được video c1_audio_set")
-            return None
-        name1 = os.path.splitext(os.path.basename(link1))[0]
-        name2 = os.path.splitext(os.path.basename(link2))[0]
-        final_name = f"{name1}_{name2}.mp4"
-        final_path = output or os.path.join(self.output_folder, final_name)
-        try:
+            _, audio_part1 = self.CG.extract_audio_and_video(trimmed1)
+            c1_audio_set = self.CG.mix_audio_with_video(link1, audio_part1)
+
             c1_clip = VideoFileClip(c1_audio_set)
             c2_clip = VideoFileClip(trimmed2)
-            target_resolution = (720, 1280)
-            target_fps = 30
-            c1_clip = c1_clip.resize(target_resolution).set_fps(target_fps)
-            c2_clip = c2_clip.resize(target_resolution).set_fps(target_fps)
+
+            if c2_clip.audio and c2_clip.audio.duration > c2_clip.duration:
+                c2_clip = c2_clip.set_audio(c2_clip.audio.subclip(0, c2_clip.duration))
+
             final_clip = concatenate_videoclips([c1_clip, c2_clip])
-            final_clip.write_videofile(final_path, codec="libx264", fps=target_fps)
+            
+            name1 = os.path.splitext(os.path.basename(link1))[0]
+            name2 = os.path.splitext(os.path.basename(link2))[0]
+            final_name = f"{name1}_{name2}.mp4"
+            final_path = output or os.path.join(self.output_folder, final_name)
+
+            final_clip.write_videofile(final_path, codec=VIDEO_CODEC, fps=TARGET_FPS)
+            
+            self.created_files.append(final_path)
             c1_clip.close()
             c2_clip.close()
             final_clip.close()
-            self.CG.clear_temp_folder()
             return final_path
+            
         except Exception as e:
-            print(f"Lỗi khi gộp video: {e}")
-            self.CG.clear_temp_folder()
+            print(f"Lỗi khi xử lý {os.path.basename(link1)} và {os.path.basename(link2)}: {e}")
+            if c1_clip_check: c1_clip_check.close()
             return None
+        finally:
+            self.CG.clear_temp_folder() 
 
 
     def merge_with_audio_swap_at_start(self, audio_source_path, video_target_path, output=None):
         """
-        Thay thế âm thanh ở phần đầu của video_target bằng âm thanh từ audio_source.
-        - audio_source_path: Video nguồn để lấy âm thanh.
-        - video_target_path: Video đích sẽ bị thay đổi âm thanh ở phần đầu.
-        - output: Đường dẫn file output (tùy chọn).
+        Kịch bản 2 (thông minh hơn): 
+        - Sử dụng độ phân giải và FPS của video đích làm chuẩn.
+        - Nếu audio nguồn dài hơn video đích: chuyển sang thay thế toàn bộ audio.
+        - Nếu audio nguồn ngắn hơn video đích: tráo audio ở phần đầu.
         """
-        print(f"Bắt đầu xử lý: Lấy audio từ '{os.path.basename(audio_source_path)}' chèn vào video '{os.path.basename(video_target_path)}'")
         try:
-            # Lấy clip nguồn audio để biết thời lượng cần thay thế
-            audio_source_clip = VideoFileClip(audio_source_path)
-            swap_duration = audio_source_clip.duration
-            audio_source_clip.close() 
-
-            video_target_clip = VideoFileClip(video_target_path)
-            if swap_duration > video_target_clip.duration:
-                print(f"Lỗi: Video nguồn audio ({swap_duration:.2f}s) dài hơn video đích ({video_target_clip.duration:.2f}s). Bỏ qua.")
-                video_target_clip.close()
-                return None
-            video_target_clip.close() 
-
-            # 1. Tách âm thanh từ video nguồn (audio_source_path)
-            audio_path = self.CG.extract_audio(audio_source_path)
-            if not audio_path or not os.path.exists(audio_path):
-                print("Lỗi: Không thể tách âm thanh từ video nguồn.")
-                return None
-
-            # 2. Cắt video đích (video_target_path) thành 2 phần dựa trên thời lượng của video nguồn
-            part1_path, part2_path = self.CG.split_video_by_time(video_target_path, swap_duration)
-            if not (os.path.exists(part1_path) and os.path.exists(part2_path)):
-                print("Lỗi: Không thể cắt video đích.")
-                return None
-
-            # 3. Gán âm thanh đã tách ở bước 1 vào phần đầu của video đích (part1_path)
-            part1_with_new_audio_path = self.CG.set_audio_video(part1_path, audio_path)
-            if not os.path.exists(part1_with_new_audio_path):
-                print("Lỗi: Không thể gán audio mới cho phần đầu video.")
-                return None
-
-            # 4. Ghép phần đầu đã thay đổi âm thanh với phần còn lại của video đích
-            clip1 = VideoFileClip(part1_with_new_audio_path)
-            clip2 = VideoFileClip(part2_path)
+            # Lấy thông tin chi tiết của cả hai file
+            _, _, swap_duration = self.get_video_details(audio_source_path)
             
-            target_resolution = (720, 1280)
-            target_fps = 30
-            clip1 = clip1.resize(target_resolution).set_fps(target_fps)
-            clip2 = clip2.resize(target_resolution).set_fps(target_fps)
+            # --- THAY ĐỔI QUAN TRỌNG: Lấy cả resolution và fps của video ĐÍCH ---
+            target_resolution, target_fps, target_duration = self.get_video_details(video_target_path)
 
-            final_clip = concatenate_videoclips([clip1, clip2])
+            # Kiểm tra nếu việc lấy thông tin thất bại
+            if swap_duration is None or target_duration is None or target_resolution is None or target_fps is None:
+                print("Lỗi: Không thể lấy thông tin đầy đủ từ một trong các file video. Bỏ qua.")
+                return None
 
-            name1 = os.path.splitext(os.path.basename(audio_source_path))[0]
-            name2 = os.path.splitext(os.path.basename(video_target_path))[0]
-            final_name = f"{name2}_audioby_{name1}.mp4"
-            final_path = output or os.path.join(self.output_folder, final_name)
+            # Logic rẽ nhánh dựa trên thời lượng
+            if swap_duration > target_duration:
+                # Trường hợp 1: Audio nguồn dài hơn video đích
+                print(f"Thông báo: Audio nguồn ({swap_duration:.2f}s) dài hơn video đích ({target_duration:.2f}s).")
+                print("--> Chuyển sang chế độ thay thế toàn bộ audio.")
+                
+                video_name = os.path.splitext(os.path.basename(video_target_path))[0]
+                audio_name = os.path.splitext(os.path.basename(audio_source_path))[0]
+                output_name = f"{video_name}.mp4"
 
-            final_clip.write_videofile(final_path, codec="libx264", fps=target_fps)
+                return self.set_new_audio_for_video(video_target_path, audio_source_path, output_file_name=output_name)
             
-            clip1.close()
-            clip2.close()
-            final_clip.close()
-            
-            print(f"Tạo video thành công: {final_path}")
-            self.created_files.append(final_path)
-            return final_path
+            else:
+                # Trường hợp 2: Audio nguồn ngắn hơn video đích
+                print(f"--> Thực hiện tráo audio phần đầu (thời lượng: {swap_duration:.2f}s).")
+
+                audio_path = self.CG.extract_audio(audio_source_path)
+                part1_path, part2_path = self.CG.split_video_by_time(video_target_path, swap_duration)
+                part1_with_new_audio_path = self.CG.mix_audio_with_video(part1_path, audio_path)
+
+                clip1 = VideoFileClip(part1_with_new_audio_path)
+                clip2 = VideoFileClip(part2_path)
+                
+                # --- THAY ĐỔI QUAN TRỌNG: Sử dụng resolution và fps động của video ĐÍCH ---
+                # Thay vì dùng hằng số TARGET_RESOLUTION, TARGET_FPS
+                print(f"    Áp dụng độ phân giải {target_resolution} và FPS {target_fps:.2f} của video gốc.")
+                clip1 = clip1.resize(target_resolution).set_fps(target_fps)
+                clip2 = clip2.resize(target_resolution).set_fps(target_fps)
+                
+                final_clip = concatenate_videoclips([clip1, clip2])
+
+                # Tạo tên file output
+                name1 = os.path.splitext(os.path.basename(audio_source_path))[0]
+                name2 = os.path.splitext(os.path.basename(video_target_path))[0]
+                final_name = f"{name2}.mp4"
+                final_path = output or os.path.join(self.output_folder, final_name)
+
+                # Sử dụng fps động khi ghi file
+                final_clip.write_videofile(final_path, codec=VIDEO_CODEC, fps=target_fps)
+                
+                clip1.close()
+                clip2.close()
+                final_clip.close()
+                print(f"    Tạo video thành công: {final_path}")
+                self.created_files.append(final_path)
+                return final_path
 
         except Exception as e:
-            print(f"Đã xảy ra lỗi không xác định trong quá trình xử lý: {e}")
+            print(f"    Đã xảy ra lỗi nghiêm trọng khi xử lý: {e}")
             return None
         finally:
             self.CG.clear_temp_folder()
 
+
+    def set_new_audio_for_video(self,audio_path, video_path, output_file_name=None):
+        """
+        Gán một file audio mới cho một file video và lưu kết quả vào thư mục output.
+        Hàm này sẽ tự động xử lý chênh lệch thời lượng giữa video và audio.
+        
+        Args:
+            video_path (str): Đường dẫn đến file video.
+            audio_path (str): Đường dẫn đến file audio (.mp3, .wav, etc.).
+            output_file_name (str, optional): Tên file output mong muốn (ví dụ: 'ket_qua.mp4'). 
+                                              Nếu không có, tên sẽ được tạo tự động.
+
+        Returns:
+            str: Đường dẫn đến file video đã tạo, hoặc None nếu có lỗi.
+        """
+        print(f"--> Bắt đầu gán audio '{os.path.basename(audio_path)}' cho video '{os.path.basename(video_path)}'")
+        try:
+            if not os.path.exists(video_path):
+                print(f"    Lỗi: File video không tồn tại tại '{video_path}'")
+                return None
+            if not os.path.exists(audio_path):
+                print(f"    Lỗi: File audio không tồn tại tại '{audio_path}'")
+                return None
+
+            if output_file_name:
+                final_path = os.path.join(self.output_folder, output_file_name)
+            else:
+                video_name = os.path.splitext(os.path.basename(video_path))[0]
+                audio_name = os.path.splitext(os.path.basename(audio_path))[0]
+                auto_name = f"{video_name}_voi_audio_{audio_name}.mp4"
+                final_path = os.path.join(self.output_folder, auto_name)
+
+            created_path = self.CG.mix_audio_with_video(video_path, audio_path, output_path=final_path)
+
+            if created_path and os.path.exists(created_path):
+                print(f"    Tạo video thành công: {created_path}")
+                self.created_files.append(created_path)
+                return created_path
+            else:
+                print("    Lỗi: Không tạo được file output.")
+                return None
+
+        except Exception as e:
+            print(f"    Đã xảy ra lỗi nghiêm trọng khi gán audio: {e}")
+            return None
+
+
     def stats(self):
-        print(f"\n--- THỐNG KÊ ---")
+        """In ra thống kê các file đã được tạo."""
+        print("\n--- THỐNG KÊ ---")
         print(f"Tổng số video đã tạo: {len(self.created_files)}")
         for f in self.created_files:
             print(f"- {f}")
 
 
-if __name__ == "__main__":
-    # Giả sử bạn có thư mục 'audios' chứa các video dùng để lấy nhạc
-    # và thư mục 'videos_to_edit' chứa các video cần được chèn nhạc
-    # và thư mục 'output_audioswap' để lưu kết quả
-    
-    # Tạo các thư mục và file giả để test
-    os.makedirs("audios", exist_ok=True)
-    os.makedirs("videos_to_edit", exist_ok=True)
-    os.makedirs("output_audioswap", exist_ok=True)
-    # Bạn cần có sẵn các file video trong các thư mục này. 
-    # Ví dụ: 'audios/nhac1.mp4', 'videos_to_edit/canh_dep.mp4'
 
-    merger = VideoMerger("output_audioswap")
-
-    # ---- VÍ DỤ SỬ DỤNG HÀM MỚI ----
-    # Giả sử bạn muốn chạy cho tất cả các kết hợp
-    audio_folder = "videos2"
+def main():
+    """Hàm chính để chạy chương trình."""
+    # Các thư mục chứa video
+    # videos1 là video chính, videos2 là video lấy audio
     video_folder = "videos1"
+    audio_folder = "videos2"
+    output_folder = "output_videos"
     
+    # Tạo các thư mục nếu chưa tồn tại
+    os.makedirs(video_folder, exist_ok=True)
+    os.makedirs(audio_folder, exist_ok=True)
+    os.makedirs(output_folder, exist_ok=True)
+    
+    # Khởi tạo đối tượng xử lý
+    merger = VideoMerger(output_folder)
+
+    # Lấy danh sách các file video
     audio_files = sorted([f for f in os.listdir(audio_folder) if f.lower().endswith(('.mp4', '.avi', '.mov'))])
     video_files = sorted([f for f in os.listdir(video_folder) if f.lower().endswith(('.mp4', '.avi', '.mov'))])
 
-    for audio_file in audio_files:
-        for video_file in video_files:
-            audio_path = os.path.join(audio_folder, audio_file)
+    print(f"Tìm thấy {len(video_files)} video chính và {len(audio_files)} video audio.")
+    
+    # Chạy vòng lặp để ghép video
+    for video_file in video_files:  
+        for audio_file in audio_files:
             video_path = os.path.join(video_folder, video_file)
+            audio_path = os.path.join(audio_folder, audio_file)
             
-            # Gọi hàm mới
+            # Gọi hàm xử lý chính
             merger.merge_with_audio_swap_at_start(audio_path, video_path)
 
+    # In thống kê kết quả
     merger.stats()
+
+if __name__ == "__main__":
+    main()
