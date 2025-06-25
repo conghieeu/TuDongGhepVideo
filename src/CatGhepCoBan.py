@@ -1,11 +1,18 @@
 import os
-from moviepy import VideoFileClip, AudioFileClip, CompositeAudioClip, concatenate_videoclips
+from moviepy import (
+    VideoFileClip,
+    AudioFileClip,
+    CompositeAudioClip,
+    concatenate_videoclips,
+)
+
 
 class CatGhepCoBan:
     """
     Lớp chứa các hàm tiện ích cơ bản để cắt, ghép, xử lý video và audio.
     Hàm __init__ cho phép tùy chỉnh cấu hình hoặc dùng giá trị mặc định.
     """
+
     def __init__(
         self,
         temp_folder=None,
@@ -61,9 +68,12 @@ class CatGhepCoBan:
     def set_audio_video(self, video_link, audio_link, output_path=None):
         """Gán một audio mới cho video. Tự động cắt audio nếu dài hơn video."""
         video = VideoFileClip(video_link)
-        audio = AudioFileClip(audio_link)
+        # SỬA LỖI: Tải audio thông qua VideoFileClip để có đối tượng audio ổn định hơn
+        audio_temp_clip = VideoFileClip(audio_link)
+        audio = audio_temp_clip.audio
 
         if audio.duration > video.duration:
+            # SỬA LỖI: Quay lại dùng subclip() trên đối tượng audio mới
             audio = audio.subclip(0, video.duration)
 
         video_with_new_audio = video.set_audio(audio)
@@ -78,8 +88,39 @@ class CatGhepCoBan:
         )
 
         video.close()
-        audio.close()
+        audio_temp_clip.close()  # Nhớ đóng file tạm
         video_with_new_audio.close()
+        return final_output_path
+
+    def replace_audio(self, video_path, new_audio_path, output_path=None):
+        """
+        Thay thế hoàn toàn audio gốc của video bằng một audio mới.
+        Nếu audio mới dài hơn video, nó sẽ được cắt để bằng thời lượng của video.
+        """
+        video_clip = VideoFileClip(video_path)
+        # SỬA LỖI: Tải audio thông qua VideoFileClip
+        audio_temp_clip = VideoFileClip(new_audio_path)
+        audio_clip = audio_temp_clip.audio
+
+        if audio_clip.duration > video_clip.duration:
+            # SỬA LỖI: Quay lại dùng subclip() trên đối tượng audio mới
+            audio_clip = audio_clip.subclip(0, video_clip.duration)
+
+        final_clip = video_clip.set_audio(audio_clip)
+
+        base_name = os.path.splitext(os.path.basename(video_path))[0]
+        default_output_name = f"{base_name}_audio_replaced.mp4"
+        final_output_path = output_path or os.path.join(
+            self.temp_folder, default_output_name
+        )
+
+        final_clip.write_videofile(
+            final_output_path, codec=self.video_codec, fps=self.target_fps
+        )
+
+        video_clip.close()
+        audio_temp_clip.close()  # Nhớ đóng file tạm
+        final_clip.close()
         return final_output_path
 
     def split_video_by_time(
@@ -99,8 +140,13 @@ class CatGhepCoBan:
                 self.temp_folder, f"{name}_part2.mp4"
             )
 
-            clip1.write_videofile(final_output1, codec=self.video_codec)
-            clip2.write_videofile(final_output2, codec=self.video_codec)
+            # SỬA LỖI: Thêm tham số fps=self.target_fps để đảm bảo FPS đồng nhất
+            clip1.write_videofile(
+                final_output1, codec=self.video_codec, fps=self.target_fps
+            )
+            clip2.write_videofile(
+                final_output2, codec=self.video_codec, fps=self.target_fps
+            )
 
             return final_output1, final_output2
 
@@ -108,12 +154,16 @@ class CatGhepCoBan:
         self, audio_path1, audio_path2, output_path=None, duration_limit=None
     ):
         """Trộn hai file audio lại với nhau và lưu thành file mới."""
-        audio1 = AudioFileClip(audio_path1)
-        audio2 = AudioFileClip(audio_path2)
+        # SỬA LỖI: Tải audio thông qua VideoFileClip
+        temp_audio1 = VideoFileClip(audio_path1)
+        audio1 = temp_audio1.audio
+        temp_audio2 = VideoFileClip(audio_path2)
+        audio2 = temp_audio2.audio
 
         clips_to_mix = []
         for aud in [audio1, audio2]:
             if duration_limit and aud.duration > duration_limit:
+                # SỬA LỖI: Quay lại dùng subclip() trên đối tượng audio mới
                 clips_to_mix.append(aud.subclip(0, duration_limit))
             else:
                 clips_to_mix.append(aud)
@@ -127,20 +177,22 @@ class CatGhepCoBan:
 
         combined_audio.write_audiofile(final_output_path)
 
-        audio1.close()
-        audio2.close()
-        combined_audio.close()
+        temp_audio1.close()
+        temp_audio2.close()
         return final_output_path
 
     def mix_audio_with_video(self, video_path, new_audio_path, output_path=None):
         """
         Trộn một audio mới vào audio gốc của video.
-        Phiên bản này hiệu quả hơn, xử lý trực tiếp trong bộ nhớ.
         """
         video_clip = VideoFileClip(video_path)
-        new_audio_clip = AudioFileClip(new_audio_path)
+        # SỬA LỖI: Tải audio thông qua VideoFileClip
+        new_audio_temp_clip = VideoFileClip(new_audio_path)
+        new_audio_clip = new_audio_temp_clip.audio
 
         if new_audio_clip.duration > video_clip.duration:
+            # SỬA LỖI: Quay lại dùng subclip() trên đối tượng audio mới
+            # Đây là dòng gây lỗi trong log của bạn.
             new_audio_clip = new_audio_clip.subclip(0, video_clip.duration)
 
         if video_clip.audio:
@@ -160,8 +212,7 @@ class CatGhepCoBan:
         )
 
         video_clip.close()
-        new_audio_clip.close()
-        final_audio.close()
+        new_audio_temp_clip.close()  # Nhớ đóng file tạm
         final_clip.close()
 
         return final_output_path
