@@ -165,6 +165,7 @@ def insert_audio_clip_mix(
     video_tail_duration,
     video_audio_gain=1.0,
     audio_insert_volume=1.0,
+    is_remove_video_audio=False,
 ):
     """
     Chèn một đoạn audio vào video tại thời điểm chỉ định, trộn với âm thanh gốc của video và điều chỉnh âm lượng từng nguồn.
@@ -177,13 +178,14 @@ def insert_audio_clip_mix(
         video_tail_duration (float): Thời lượng phần đuôi video sau khi audio kết thúc (tính bằng giây).
         video_audio_gain (float, optional): Hệ số điều chỉnh âm lượng audio gốc của video. Mặc định là 1.0.
         audio_insert_volume (float, optional): Hệ số điều chỉnh âm lượng audio chèn vào. Mặc định là 1.0.
+        is_remove_video_audio (bool, optional): Nếu True, sẽ loại bỏ âm thanh gốc của video. Mặc định là False.
     Returns:
         VideoFileClip: Đối tượng video mới đã được chèn và trộn audio.
     Raises:
         ValueError: Nếu file video/audio chèn vào không có âm thanh.
     Ghi chú:
         - Hỗ trợ cả file audio (.mp3, .wav, ...) và video có audio.
-        - Âm thanh mới sẽ được trộn (mix) với âm thanh gốc của video.
+        - Âm thanh mới sẽ được trộn (mix) với âm thanh gốc của video hoặc thay thế hoàn toàn.
         - Có thể điều chỉnh âm lượng từng nguồn âm thanh riêng biệt.
     """
     video_duration = video.duration
@@ -205,23 +207,30 @@ def insert_audio_clip_mix(
     elif total_needed_duration < video_duration:
         video = video.subclip(0, total_needed_duration)
 
-    # Trộn âm thanh: audio cũ + audio mới, có chỉnh âm lượng
-    base_audio = video.audio.volumex(video_audio_gain) if video.audio else None
+    # Xử lý âm thanh dựa trên tham số is_remove_video_audio
     new_audio = audio.volumex(audio_insert_volume).set_start(audio_insert_time)
-    mixed_audio = CompositeAudioClip(
-        [base_audio, new_audio] if base_audio else [new_audio]
-    )
+    
+    if is_remove_video_audio:
+        # Chỉ dùng audio mới, loại bỏ audio gốc của video
+        mixed_audio = new_audio
+    else:
+        # Trộn âm thanh: audio cũ + audio mới, có chỉnh âm lượng
+        base_audio = video.audio.volumex(video_audio_gain) if video.audio else None
+        mixed_audio = CompositeAudioClip(
+            [base_audio, new_audio] if base_audio else [new_audio]
+        )
 
     return video.set_audio(mixed_audio)
 
 
-def combine_audio_overlay_all_pairs(video_folder, audio_folder, output_folder):
+def combine_audio_overlay_all_pairs(video_folder, audio_folder, output_folder, remove_original_audio=False):
     """
     Kết hợp từng file audio với từng file video trong hai thư mục, xuất ra tất cả các cặp video-audio có thể.
     Args:
         video_folder (str): Đường dẫn tới thư mục chứa các file video (.mp4).
-        audio_folder (str): Đường dẫn tới thư mục chứa các file audio (.mp3, .mp4).
+        audio_folder (str): Đường dẫn tới thư mục chứa các file audio (.mp3, .wav, .aac, .m4a, .mp4).
         output_folder (str): Đường dẫn tới thư mục xuất các file video đã ghép audio.
+        remove_original_audio (bool, optional): Nếu True, sẽ loại bỏ âm thanh gốc của video. Mặc định là False.
     Chức năng:
         - Duyệt qua tất cả các file video và audio, ghép từng audio vào từng video.
         - Chuẩn hóa độ phân giải và fps của video theo video gốc.
@@ -229,12 +238,12 @@ def combine_audio_overlay_all_pairs(video_folder, audio_folder, output_folder):
         - Xuất file video mới với tên dạng <tên_video>_<tên_audio>.mp4 vào output_folder.
         - In ra thông báo tiến trình và lỗi (nếu có).
     Ví dụ:
-        combine_audio_overlay_all_pairs("videos", "audios", "output")
+        combine_audio_overlay_all_pairs("videos", "audios", "output", remove_original_audio=True)
     """
     os.makedirs(output_folder, exist_ok=True)
 
     video_files = [f for f in os.listdir(video_folder) if f.endswith(".mp4")]
-    audio_files = [f for f in os.listdir(audio_folder) if f.endswith((".mp3", ".mp4"))]
+    audio_files = [f for f in os.listdir(audio_folder) if f.endswith((".mp3", ".wav", ".aac", ".m4a", ".mp4"))]
 
     print("📂 Danh sách video:", video_files)
     print("🎵 Danh sách audio:", audio_files)
@@ -258,9 +267,15 @@ def combine_audio_overlay_all_pairs(video_folder, audio_folder, output_folder):
                     VideoFileClip(video_path), resolution, fps
                 )
 
-                # Đảm bảo có đủ độ dài để ghép audio
+                # Đảm bảo có đủ độ dài để ghép audio với tùy chọn loại bỏ audio gốc
                 video_with_audio = insert_audio_clip_mix(
-                    video_clip, audio_path, 0, 3, 0.4
+                    video_clip, 
+                    audio_path, 
+                    0, 
+                    3, 
+                    0.4, 
+                    1.0, 
+                    is_remove_video_audio=True
                 )
 
                 # Đặt tên theo dạng video_audio
@@ -279,7 +294,9 @@ def combine_audio_overlay_all_pairs(video_folder, audio_folder, output_folder):
 if __name__ == "__main__":
     print("▶️ Script bắt đầu...")
 
-    video_folder = r"C:\Users\PC\Desktop\Processing"
-    audio_folder = r"C:\Users\PC\Desktop\Processing\New folder"
-    output_folder = r"C:\Users\PC\Desktop\Processing\Output"
-    combine_audio_overlay_all_pairs(video_folder, audio_folder, output_folder)
+    video_folder = r"C:\Users\PC\Downloads\Edit\video can ghep"
+    audio_folder = r"C:\Users\PC\Downloads\Edit"
+    output_folder = r"C:\Users\PC\Downloads\Edit\video da ghep -20250708T101236Z-1-001"
+
+    # Có thể chọn True để loại bỏ âm thanh gốc của video, False để trộn âm thanh
+    combine_audio_overlay_all_pairs(video_folder, audio_folder, output_folder, remove_original_audio=True)
