@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Ghép Audio vào Video - Công cụ MoviePy</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f7f7f7; margin: 0; padding: 0; }
+        .container { max-width: 500px; margin: 40px auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #ccc; padding: 32px; }
+        h2 { text-align: center; color: #2d7be5; }
+        label { display: block; margin-top: 18px; font-weight: bold; }
+        input[type="file"] { margin-top: 6px; }
+        .row { margin-top: 18px; }
+        button { margin-top: 28px; width: 100%; padding: 12px; background: #2d7be5; color: #fff; border: none; border-radius: 4px; font-size: 1.1em; cursor: pointer; }
+        button:hover { background: #1b5fa7; }
+        .result { margin-top: 24px; padding: 12px; background: #eaf6ff; border-radius: 4px; color: #1b5fa7; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Ghép Audio vào Video</h2>
+    <form id="mergeForm">
+        <label>Chọn thư mục video gốc:
+            <input type="file" id="video_folder" webkitdirectory directory required>
+        </label>
+        <label>Chọn thư mục audio:
+            <input type="file" id="audio_folder" webkitdirectory directory required>
+        </label>
+        <label>Chọn thư mục xuất kết quả:
+            <input type="file" id="output_folder" webkitdirectory directory required>
+        </label>
+        <div class="row">
+            <label>
+                <input type="checkbox" id="remove_audio">
+                Loại bỏ âm thanh gốc của video (chỉ giữ âm thanh mới)
+            </label>
+        </div>
+        <button type="submit">Bắt đầu ghép video</button>
+    </form>
+    <div class="result" id="result"></div>
+</div>
+<script>
+document.getElementById('mergeForm').onsubmit = async function(e) {
+    e.preventDefault();
+    const videoFolder = document.getElementById('video_folder').files[0];
+    const audioFolder = document.getElementById('audio_folder').files[0];
+    const outputFolder = document.getElementById('output_folder').files[0];
+    const removeAudio = document.getElementById('remove_audio').checked;
+
+    if (!videoFolder || !audioFolder || !outputFolder) {
+        document.getElementById('result').innerText = "Vui lòng chọn đủ 3 thư mục!";
+        return;
+    }
+
+    // Lấy đường dẫn thư mục cha (chỉ dùng được khi chạy Electron hoặc backend hỗ trợ)
+    const video_folder_path = videoFolder.webkitRelativePath.split('/')[0];
+    const audio_folder_path = audioFolder.webkitRelativePath.split('/')[0];
+    const output_folder_path = outputFolder.webkitRelativePath.split('/')[0];
+
+    document.getElementById('result').innerText = "Đang gửi yêu cầu xử lý...";
+
+    // Gửi request tới backend Flask (giả sử chạy ở localhost:5000)
+    fetch('/run_merge', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            video_folder: video_folder_path,
+            audio_folder: audio_folder_path,
+            output_folder: output_folder_path,
+            remove_original_audio: removeAudio
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById('result').innerText = data.message || "Đã gửi yêu cầu!";
+    })
+    .catch(err => {
+        document.getElementById('result').innerText = "Lỗi gửi yêu cầu: " + err;
+    });
+};
+</script>
+</body>
+</html>

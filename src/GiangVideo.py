@@ -4,8 +4,10 @@ from moviepy.editor import (
     AudioFileClip,
     CompositeAudioClip,
 )
+from moviepy.audio.fx.volumex import volumex
 import os
 import moviepy.video.fx.all as vfx
+import shutil
 
 # Tải video từ YouTube
 # def download_youtube_video(url, output_path='downloads'):
@@ -136,7 +138,7 @@ def merge_videos_with_audio_and_outro(
                         VideoFileClip(outro_path), resolution, fps
                     )
                     main_clip = main_clip.without_audio()
-                    outro_clip = outro_clip.set_audio(outro_clip.audio.volumex(0.3))
+                    outro_clip = outro_clip.set_audio(volumex(outro_clip.audio, 0.3))
 
                     print("Ghép video chính + outro")
                     merged_video = merge_videos(
@@ -208,14 +210,14 @@ def insert_audio_clip_mix(
         video = video.subclip(0, total_needed_duration)
 
     # Xử lý âm thanh dựa trên tham số is_remove_video_audio
-    new_audio = audio.volumex(audio_insert_volume).set_start(audio_insert_time)
-    
+    new_audio = volumex(audio, audio_insert_volume).set_start(audio_insert_time)
+
     if is_remove_video_audio:
         # Chỉ dùng audio mới, loại bỏ audio gốc của video
         mixed_audio = new_audio
     else:
         # Trộn âm thanh: audio cũ + audio mới, có chỉnh âm lượng
-        base_audio = video.audio.volumex(video_audio_gain) if video.audio else None
+        base_audio = volumex(video.audio, video_audio_gain) if video.audio else None
         mixed_audio = CompositeAudioClip(
             [base_audio, new_audio] if base_audio else [new_audio]
         )
@@ -223,7 +225,9 @@ def insert_audio_clip_mix(
     return video.set_audio(mixed_audio)
 
 
-def combine_audio_overlay_all_pairs(video_folder, audio_folder, output_folder, remove_original_audio=False):
+def combine_audio_overlay_all_pairs(
+    video_folder, audio_folder, output_folder, remove_original_audio=False
+):
     """
     Kết hợp từng file audio với từng file video trong hai thư mục, xuất ra tất cả các cặp video-audio có thể.
     Args:
@@ -243,7 +247,11 @@ def combine_audio_overlay_all_pairs(video_folder, audio_folder, output_folder, r
     os.makedirs(output_folder, exist_ok=True)
 
     video_files = [f for f in os.listdir(video_folder) if f.endswith(".mp4")]
-    audio_files = [f for f in os.listdir(audio_folder) if f.endswith((".mp3", ".wav", ".aac", ".m4a", ".mp4"))]
+    audio_files = [
+        f
+        for f in os.listdir(audio_folder)
+        if f.endswith((".mp3", ".wav", ".aac", ".m4a", ".mp4"))
+    ]
 
     print("📂 Danh sách video:", video_files)
     print("🎵 Danh sách audio:", audio_files)
@@ -269,13 +277,7 @@ def combine_audio_overlay_all_pairs(video_folder, audio_folder, output_folder, r
 
                 # Đảm bảo có đủ độ dài để ghép audio với tùy chọn loại bỏ audio gốc
                 video_with_audio = insert_audio_clip_mix(
-                    video_clip, 
-                    audio_path, 
-                    0, 
-                    3, 
-                    0.4, 
-                    1.0, 
-                    is_remove_video_audio=True
+                    video_clip, audio_path, 0, 3, 0.4, 1.0, is_remove_video_audio=True
                 )
 
                 # Đặt tên theo dạng video_audio
@@ -291,12 +293,67 @@ def combine_audio_overlay_all_pairs(video_folder, audio_folder, output_folder, r
                 print(f"❌ Lỗi với {video_file} + {audio_file}: {e}")
 
 
+def cut_all_videos_in_folder(
+    video_folder, output_folder, cut_duration, remove_original_audio=False
+):
+    """
+    Cắt liên tục tất cả các video trong video_folder thành các đoạn ngắn có độ dài cut_duration (tính bằng giây).
+    Mỗi video sẽ được lưu vào một thư mục con theo tên video gốc trong output_folder.
+    Nếu remove_original_audio=True thì xóa âm thanh, ngược lại giữ nguyên âm thanh gốc.
+    """
+    os.makedirs(output_folder, exist_ok=True)
+    video_files = [f for f in os.listdir(video_folder) if f.lower().endswith(".mp4")]
+
+    print("📂 Danh sách video cần cắt:", video_files)
+
+    for video_file in video_files:
+        video_path = os.path.join(video_folder, video_file)
+        video_name, _ = os.path.splitext(video_file)
+        video_output_dir = os.path.join(output_folder, video_name)
+        os.makedirs(video_output_dir, exist_ok=True)
+        try:
+            clip = VideoFileClip(video_path)
+            total_duration = clip.duration
+            start = 0
+            idx = 1
+            while start < total_duration:
+                end = min(start + cut_duration, total_duration)
+                cut_clip = clip.subclip(start, end)
+                if not cut_clip.audio or remove_original_audio:
+                    cut_clip = cut_clip.without_audio()
+                output_path = os.path.join(video_output_dir, f"{idx}.mp4")
+                try:
+                    save_clip(cut_clip, output_path)
+                except Exception as e:
+                    print(f"⚠️ Lỗi khi lưu {output_path} với audio, thử lại không audio: {e}")
+                    try:
+                        cut_clip = cut_clip.without_audio()
+                        save_clip(cut_clip, output_path)
+                    except Exception as e2:
+                        print(f"❌ Vẫn lỗi khi lưu {output_path}: {e2}")
+                print(f"✅ Đã xuất: {output_path}")
+                cut_clip.close()
+                idx += 1
+                start = end
+            clip.close()
+        except Exception as e:
+            print(f"❌ Lỗi với {video_file}: {e}")
+
+
 if __name__ == "__main__":
     print("▶️ Script bắt đầu...")
 
-    video_folder = r"C:\Users\PC\Downloads\Edit\video can ghep"
+    video_folder = r"C:\Users\PC\Desktop\VideoFakeCall"
     audio_folder = r"C:\Users\PC\Downloads\Edit"
-    output_folder = r"C:\Users\PC\Downloads\Edit\video da ghep -20250708T101236Z-1-001"
+    output_folder = r"C:\Users\PC\Desktop\VideoFakeCall\VideoUp"
 
     # Có thể chọn True để loại bỏ âm thanh gốc của video, False để trộn âm thanh
-    combine_audio_overlay_all_pairs(video_folder, audio_folder, output_folder, remove_original_audio=True)
+    # combine_audio_overlay_all_pairs(
+    #     video_folder, audio_folder, output_folder, remove_original_audio=True
+    # )
+
+    # Thư mục lưu video đã cắt 
+    cut_duration = 10  # số giây muốn cắt
+    cut_all_videos_in_folder(
+        video_folder, output_folder, cut_duration, remove_original_audio=False
+    )
