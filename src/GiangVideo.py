@@ -235,14 +235,6 @@ def combine_audio_overlay_all_pairs(
         audio_folder (str): Đường dẫn tới thư mục chứa các file audio (.mp3, .wav, .aac, .m4a, .mp4).
         output_folder (str): Đường dẫn tới thư mục xuất các file video đã ghép audio.
         remove_original_audio (bool, optional): Nếu True, sẽ loại bỏ âm thanh gốc của video. Mặc định là False.
-    Chức năng:
-        - Duyệt qua tất cả các file video và audio, ghép từng audio vào từng video.
-        - Chuẩn hóa độ phân giải và fps của video theo video gốc.
-        - Đảm bảo video đủ dài để ghép audio.
-        - Xuất file video mới với tên dạng <tên_video>_<tên_audio>.mp4 vào output_folder.
-        - In ra thông báo tiến trình và lỗi (nếu có).
-    Ví dụ:
-        combine_audio_overlay_all_pairs("videos", "audios", "output", remove_original_audio=True)
     """
     os.makedirs(output_folder, exist_ok=True)
 
@@ -275,9 +267,19 @@ def combine_audio_overlay_all_pairs(
                     VideoFileClip(video_path), resolution, fps
                 )
 
-                # Đảm bảo có đủ độ dài để ghép audio với tùy chọn loại bỏ audio gốc
+                # =================================================================
+                # SỬA LỖI Ở ĐÂY
+                # Tham số is_remove_video_audio giờ sẽ lấy giá trị từ remove_original_audio
+                # thay vì bị gán cứng là True.
+                # =================================================================
                 video_with_audio = insert_audio_clip_mix(
-                    video_clip, audio_path, 0, 3, 0.4, 1.0, is_remove_video_audio=True
+                    video_clip,
+                    audio_path,
+                    0,
+                    3,
+                    0.4,
+                    1.0,
+                    is_remove_video_audio=remove_original_audio, # <-- ĐÃ SỬA
                 )
 
                 # Đặt tên theo dạng video_audio
@@ -291,6 +293,7 @@ def combine_audio_overlay_all_pairs(
 
             except Exception as e:
                 print(f"❌ Lỗi với {video_file} + {audio_file}: {e}")
+
 
 
 def cut_all_videos_in_folder(
@@ -343,9 +346,9 @@ def cut_all_videos_in_folder(
 if __name__ == "__main__":
     print("▶️ Script bắt đầu...")
 
-    video_folder = r"C:\Users\PC\Desktop\VideoFakeCall"
-    audio_folder = r"C:\Users\PC\Downloads\Edit"
-    output_folder = r"C:\Users\PC\Desktop\VideoFakeCall\VideoUp"
+    video_folder = r"media"
+    audio_folder = r"output"
+    output_folder = r"output"
 
     # Có thể chọn True để loại bỏ âm thanh gốc của video, False để trộn âm thanh
     # combine_audio_overlay_all_pairs(

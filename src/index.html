@@ -2,81 +2,224 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Ghép Audio vào Video - Công cụ MoviePy</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trình ghép Video & Audio</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #f7f7f7; margin: 0; padding: 0; }
-        .container { max-width: 500px; margin: 40px auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #ccc; padding: 32px; }
-        h2 { text-align: center; color: #2d7be5; }
-        label { display: block; margin-top: 18px; font-weight: bold; }
-        input[type="file"] { margin-top: 6px; }
-        .row { margin-top: 18px; }
-        button { margin-top: 28px; width: 100%; padding: 12px; background: #2d7be5; color: #fff; border: none; border-radius: 4px; font-size: 1.1em; cursor: pointer; }
-        button:hover { background: #1b5fa7; }
-        .result { margin-top: 24px; padding: 12px; background: #eaf6ff; border-radius: 4px; color: #1b5fa7; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: #1c1e21;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 600px;
+        }
+        h1 {
+            text-align: center;
+            color: #0d6efd;
+            margin-bottom: 1.5rem;
+        }
+        .upload-section {
+            margin-bottom: 1.5rem;
+        }
+        label {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+        .file-input {
+            display: block;
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ccd0d5;
+            border-radius: 6px;
+            cursor: pointer;
+            background-color: #f5f6f7;
+        }
+        .file-list {
+            list-style-type: none;
+            padding: 0;
+            margin-top: 0.5rem;
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 0.5rem;
+        }
+        .file-list li {
+            padding: 0.25rem 0.5rem;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            font-size: 0.9em;
+        }
+        .options {
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+        }
+        .options input {
+            margin-right: 0.5rem;
+        }
+        .process-button {
+            width: 100%;
+            padding: 0.8rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #fff;
+            background-color: #0d6efd;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .process-button:hover:not(:disabled) {
+            background-color: #0b5ed7;
+        }
+        .process-button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .status {
+            text-align: center;
+            margin-top: 1rem;
+            font-weight: 500;
+            color: #65676b;
+            min-height: 20px;
+        }
     </style>
 </head>
 <body>
-<div class="container">
-    <h2>Ghép Audio vào Video</h2>
-    <form id="mergeForm">
-        <label>Chọn thư mục video gốc:
-            <input type="file" id="video_folder" webkitdirectory directory required>
-        </label>
-        <label>Chọn thư mục audio:
-            <input type="file" id="audio_folder" webkitdirectory directory required>
-        </label>
-        <label>Chọn thư mục xuất kết quả:
-            <input type="file" id="output_folder" webkitdirectory directory required>
-        </label>
-        <div class="row">
-            <label>
-                <input type="checkbox" id="remove_audio">
-                Loại bỏ âm thanh gốc của video (chỉ giữ âm thanh mới)
-            </label>
-        </div>
-        <button type="submit">Bắt đầu ghép video</button>
-    </form>
-    <div class="result" id="result"></div>
-</div>
-<script>
-document.getElementById('mergeForm').onsubmit = async function(e) {
-    e.preventDefault();
-    const videoFolder = document.getElementById('video_folder').files[0];
-    const audioFolder = document.getElementById('audio_folder').files[0];
-    const outputFolder = document.getElementById('output_folder').files[0];
-    const removeAudio = document.getElementById('remove_audio').checked;
 
-    if (!videoFolder || !audioFolder || !outputFolder) {
-        document.getElementById('result').innerText = "Vui lòng chọn đủ 3 thư mục!";
-        return;
+<div class="container">
+    <h1>Ghép Video và Audio</h1>
+
+    <!-- Phần chọn Video -->
+    <div class="upload-section">
+        <label for="video-input">1. Chọn các tệp Video (.mp4):</label>
+        <input type="file" id="video-input" class="file-input" accept="video/mp4" multiple>
+        <ul id="video-list" class="file-list"></ul>
+    </div>
+
+    <!-- Phần chọn Audio -->
+    <div class="upload-section">
+        <label for="audio-input">2. Chọn các tệp Audio (.mp3, .mp4, .wav...):</label>
+        <input type="file" id="audio-input" class="file-input" accept="audio/*,video/mp4" multiple>
+        <ul id="audio-list" class="file-list"></ul>
+    </div>
+
+    <!-- Tùy chọn -->
+    <div class="options">
+        <input type="checkbox" id="remove-audio-checkbox">
+        <label for="remove-audio-checkbox">Loại bỏ âm thanh gốc của video</label>
+    </div>
+
+    <!-- Nút xử lý -->
+    <button id="process-btn" class="process-button">3. Bắt đầu xử lý</button>
+
+    <!-- Trạng thái -->
+    <p id="status" class="status"></p>
+</div>
+
+<script>
+    const videoInput = document.getElementById('video-input');
+    const audioInput = document.getElementById('audio-input');
+    const videoList = document.getElementById('video-list');
+    const audioList = document.getElementById('audio-list');
+    const removeAudioCheckbox = document.getElementById('remove-audio-checkbox');
+    const processBtn = document.getElementById('process-btn');
+    const statusEl = document.getElementById('status');
+
+    // Hiển thị danh sách file đã chọn
+    function updateFileList(input, listElement) {
+        listElement.innerHTML = '';
+        if (input.files.length > 0) {
+            for (const file of input.files) {
+                const listItem = document.createElement('li');
+                listItem.textContent = file.name;
+                listElement.appendChild(listItem);
+            }
+        }
     }
 
-    // Lấy đường dẫn thư mục cha (chỉ dùng được khi chạy Electron hoặc backend hỗ trợ)
-    const video_folder_path = videoFolder.webkitRelativePath.split('/')[0];
-    const audio_folder_path = audioFolder.webkitRelativePath.split('/')[0];
-    const output_folder_path = outputFolder.webkitRelativePath.split('/')[0];
+    videoInput.addEventListener('change', () => updateFileList(videoInput, videoList));
+    audioInput.addEventListener('change', () => updateFileList(audioInput, audioList));
 
-    document.getElementById('result').innerText = "Đang gửi yêu cầu xử lý...";
+    // Xử lý sự kiện click nút
+    processBtn.addEventListener('click', async () => {
+        if (videoInput.files.length === 0 || audioInput.files.length === 0) {
+            statusEl.textContent = 'Vui lòng chọn ít nhất một video và một audio.';
+            statusEl.style.color = 'red';
+            return;
+        }
 
-    // Gửi request tới backend Flask (giả sử chạy ở localhost:5000)
-    fetch('/run_merge', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            video_folder: video_folder_path,
-            audio_folder: audio_folder_path,
-            output_folder: output_folder_path,
-            remove_original_audio: removeAudio
-        })
-    })
-    .then(res => res.json())
-    .then(data => {
-        document.getElementById('result').innerText = data.message || "Đã gửi yêu cầu!";
-    })
-    .catch(err => {
-        document.getElementById('result').innerText = "Lỗi gửi yêu cầu: " + err;
+        // Vô hiệu hóa nút và cập nhật trạng thái
+        processBtn.disabled = true;
+        processBtn.textContent = 'Đang xử lý...';
+        statusEl.textContent = 'Đang tải tệp lên máy chủ...';
+        statusEl.style.color = '#65676b';
+
+        // Tạo đối tượng FormData để gửi file
+        const formData = new FormData();
+        for (const file of videoInput.files) {
+            formData.append('videos', file);
+        }
+        for (const file of audioInput.files) {
+            formData.append('audios', file);
+        }
+        formData.append('remove_original_audio', removeAudioCheckbox.checked);
+
+        try {
+            // Gửi yêu cầu đến server
+            statusEl.textContent = 'Máy chủ đang xử lý các video. Quá trình này có thể mất nhiều thời gian...';
+            const response = await fetch('/process', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Lỗi từ máy chủ: ${response.statusText}`);
+            }
+
+            // Nhận tệp zip và tạo link tải xuống
+            statusEl.textContent = 'Đã xử lý xong! Đang chuẩn bị tệp để tải xuống...';
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            // Đặt tên file tải về
+            a.download = 'processed_videos.zip'; 
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+            
+            statusEl.textContent = 'Tải xuống thành công! Bạn có thể xử lý các tệp khác.';
+            statusEl.style.color = 'green';
+
+        } catch (error) {
+            console.error('Lỗi:', error);
+            statusEl.textContent = `Đã xảy ra lỗi: ${error.message}`;
+            statusEl.style.color = 'red';
+        } finally {
+            // Kích hoạt lại nút
+            processBtn.disabled = false;
+            processBtn.textContent = '3. Bắt đầu xử lý';
+        }
     });
-};
 </script>
+
 </body>
 </html>
